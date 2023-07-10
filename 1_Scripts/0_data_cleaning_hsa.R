@@ -17,6 +17,7 @@ c = read.csv(here("0_Data", "Raw", "United_States_COVID-19_Community_Levels_by_C
                 county_population, health_service_area_number,
                 health_service_area, health_service_area_population)
 
+date_filter_start = "2020-09-02"
 #### HOSPITALIZATIONS ####
 h = read.csv(here("0_Data", "Raw", "hosps_county.csv")) %>% 
   mutate(fips = as.numeric(fips_code)) %>%
@@ -79,7 +80,7 @@ h = read.csv(here("0_Data", "Raw", "hosps_county.csv")) %>%
          icu_100K = icu_confirmed_avg/health_service_area_population*100000/7) %>%
   
   # filter date
-  filter(date>="2020-09-02")
+  filter(date>=date_filter_start)
   
 
 ## CHECKS ##
@@ -94,6 +95,7 @@ chk_complete = h %>% filter(date >= "2021-02-01" & date <= "2022-10-01") %>%
 #### CASE DATA ####
 df0 = read.csv(here("0_Data", "Raw", "us-counties-2021.csv")) %>% 
   bind_rows(read.csv(here("0_Data", "Raw", "us-counties-2022.csv"))) %>%
+  bind_rows(read.csv(here("0_Data", "Raw", "us-counties-2020.csv"))) %>%
   
   # filter out PR & Virgin Islands & arrange
   filter(!state%in%c("American Samoa", "Guam",
@@ -179,7 +181,7 @@ df = df0 %>%
   dotw = weekdays(ymd),
   
   # check completeness/duplicates
-  chk = paste(ymd, health_service_area_number)) %>% filter(ymd>="2021-01-01") %>% ungroup() %>%
+  chk = paste(ymd, health_service_area_number)) %>% filter(ymd>=date_filter_start) %>% ungroup() %>%
   mutate(county_rank = rank(-1*POPESTIMATE2019))
 
 ## CHECKS ##
@@ -209,19 +211,23 @@ d_out_pre_hsa = df %>%
   # group by county + date to calculate relevant benchmarks
   group_by(health_service_area_number) %>% arrange(ymd) %>%
   mutate(deaths_21_lag_100k_14d = rollmean(deaths_21_lag_100k, k = 2, align = "right", na.pad = TRUE, na.rm = T)*14,
-  
+  #### LOOK HERE ####
+  # for variables to use
+  # ymd = date
+  # health_service_area_number = HSA #
+  # health_service_area_population = population
   # put metrics on weekly scale
-         deaths_weekly = deaths_21_lag_100k*7,
-         admits_weekly = admits_confirmed_100K*7,
-         cases_weekly = round(cases_avg_per_100k*7),
-         icu_weekly = icu_100K*7,
-         perc_covid_100 = perc_covid*100,
+         deaths_weekly = deaths_21_lag_100k*7,     # deaths 3 weeks into the future
+         admits_weekly = admits_confirmed_100K*7,  # total weekly admits per 100K
+         cases_weekly = round(cases_avg_per_100k*7),  # total weekly cases per 100K
+         icu_weekly = icu_100K*7,                     # total weekly ICU census per 100K
+         perc_covid_100 = perc_covid*100,             # percent inpatient bed occupancy per 100K
          cfr = deaths_avg_per_100k/cases_lag_21_100K*100,
   
          # 7-day outcomes
-         half_zeke_time_3 = lead(deaths_avg_per_100k*7, 3) > 0.5,
+         half_zeke_time_3 = lead(deaths_avg_per_100k*7, 3) > 0.5,    # 3 week ahead deaths > .5/100K
          chk2 = lead(deaths_avg_per_100k, 3),
-         zeke_time_3 = lead(deaths_avg_per_100k*7, 3) > 1,
+         zeke_time_3 = lead(deaths_avg_per_100k*7, 3) > 1,           # 3 week ahead deaths > 1/100K
          two_zeke_time_3 = lead(deaths_avg_per_100k*7, 3) > 2,
          icu_2_time_3 = icu_21_lag_100K*7 > 2,
          perc_covid_10_time_3 = lead(perc_covid_100, 3) > 10,
