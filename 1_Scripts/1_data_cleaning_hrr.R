@@ -13,7 +13,7 @@ s = state_census %>% dplyr::select(NAME, ABBR)
 c = read.csv(here("0_Data", "Raw","United_States_COVID-19_Community_Levels_by_County.csv")) %>%
   mutate(ymd = as.Date(date_updated, "%Y-%m-%d")+1, fips = as.numeric(county_fips)) %>%
   filter(ymd == "2022-05-06") %>%
-  dplyr::select(county, county_fips, state, fips,county_population)
+  dplyr::select(county, county_fips, fips,county_population)
 
 zip <- read.csv(here("0_Data", "Raw","ZIP_COUNTY_032023.csv"))%>%
   dplyr::select(ZIP,COUNTY)%>%
@@ -23,7 +23,7 @@ zip <- read.csv(here("0_Data", "Raw","ZIP_COUNTY_032023.csv"))%>%
   distinct(COUNTY,.keep_all = TRUE)   #only need one ZIP for each county
   
 crosswalk <- read.csv(here("0_Data", "Raw","ZipHsaHrr19.csv"))%>%
-  dplyr::select(zipcode19,hrrnum,hrrcity)%>%
+  dplyr::select(zipcode19,hrrnum,hrrcity,hrrstate)%>%
   inner_join(zip, c("zipcode19" = "ZIP"))  #join crosswalks on ZIP
 
 #get hrr population
@@ -38,7 +38,7 @@ date_filter_start = "2020-09-02"
 h = read.csv(here("0_Data", "Raw", "hosps_county.csv")) %>% 
   mutate(fips = as.numeric(fips_code)) %>%
   
-  # join to health services areas
+  # join to hospital referral regions
   left_join(c, c("fips" = "fips")) %>%
   
   # harmonize date with case reporting dates
@@ -145,7 +145,7 @@ df0 = read.csv(here("0_Data", "Raw", "us-counties-2021.csv")) %>%
 df = df0 %>%
   
   # average over HRR
-  group_by(date, hrrnum, hrrcity, hrr_population) %>%
+  group_by(date, hrrnum, hrrcity, hrr_population, hrrstate) %>%
   summarize(cases_avg = sum(cases_avg, na.rm = T), deaths_avg = sum(deaths_avg, na.rm = T)) %>%
   mutate(cases_avg_per_100k = cases_avg/hrr_population*100000,
          deaths_avg_per_100k = deaths_avg/hrr_population*100000,
@@ -213,7 +213,7 @@ min(table(df$hrrnum))
 max(table(df$hrrnum))
 
 # check on lags
-df %>% group_by(hrrnum, hrrcity) %>%
+df %>% group_by(hrrnum, hrrcity, hrrstate) %>%
   summarize(a = deaths_21_lag_100k[date=="2022-02-02"], b = deaths_avg_per_100k[date=="2022-02-23"]) %>%
   ungroup() %>% summarize(mean(a==b))
 
@@ -256,7 +256,7 @@ d_out_pre_hrr = df %>%
          two_zeke_time_3_14d = deaths_21_lag_100k_14d > 4,
          
          # rename for coding consistency
-         state = hrrnum) %>%
+         state = hrrstate) %>%
   group_by(ymd) %>%
   mutate(weight = POPESTIMATE2019/sum(POPESTIMATE2019),
          weight_alt = 1/length(POPESTIMATE2019))
@@ -277,6 +277,3 @@ d_out_pre_hrr %>% filter(is.na(hrr_population)) %>% ungroup() %>% dplyr::select(
 #### SAVE CLEANED DATA ####
 save(d_out_pre_hrr, file = here("0_Data", "Cleaned", "hrr_time_data.RData"))
 write.csv(d_out_pre_hrr, file = here("0_Data", "Cleaned", "hrr_time_data.csv"))
-
-
-
